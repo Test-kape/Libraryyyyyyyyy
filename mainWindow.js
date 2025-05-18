@@ -122,7 +122,13 @@ async function extractEpubMetadata(filePath) {
         await book.ready;
 
         const metadata = book.package.metadata;
-        const cover = await book.coverUrl();
+        let coverUrl = null;
+
+        try {
+            coverUrl = await book.coverUrl();
+        } catch (error) {
+            console.warn('Error getting cover URL:', error);
+        }
 
         // Extract metadata safely with proper handling of arrays and objects
         const extractField = (field) => {
@@ -138,7 +144,7 @@ async function extractEpubMetadata(filePath) {
 
         const result = {
             info: {
-                Title: extractField('title') || 'Unknown Title',
+                Title: extractField('title') || path.basename(filePath),
                 Creator: extractField('creator') || 'Unknown Author',
                 Publisher: extractField('publisher'),
                 Language: extractField('language'),
@@ -147,10 +153,12 @@ async function extractEpubMetadata(filePath) {
                 Subject: extractField('subject'),
                 Modified: extractField('date'),
             },
-            coverUrl: cover,
-            book: book,
+            coverUrl: coverUrl,
             pageCount: pageCount
         };
+
+        // Clean up
+        URL.revokeObjectURL(url);
         
         return result;
     } catch (error) {
@@ -283,7 +291,7 @@ async function updateBookList(books) {
             } else if (book.type === 'epub') {
                 metadata = await extractEpubMetadata(book.path);
                 
-                // Create placeholder cover if no cover is available
+                // Create placeholder cover
                 const placeholderDiv = document.createElement('div');
                 placeholderDiv.className = 'placeholder-cover';
                 placeholderDiv.innerHTML = '<svg viewBox="0 0 24 24"><path d="M21,5C19.89,4.65 18.67,4.5 17.5,4.5C15.55,4.5 13.45,4.9 12,6C10.55,4.9 8.45,4.5 6.5,4.5C4.55,4.5 2.45,4.9 1,6V20.65C1,20.9 1.25,21.15 1.5,21.15C1.6,21.15 1.65,21.1 1.75,21.1C3.1,20.45 5.05,20 6.5,20C8.45,20 10.55,20.4 12,21.5C13.35,20.65 15.8,20 17.5,20C19.15,20 20.85,20.3 22.25,21.05C22.35,21.1 22.4,21.1 22.5,21.1C22.75,21.1 23,20.85 23,20.6V6C22.4,5.55 21.75,5.25 21,5M21,18.5C19.9,18.15 18.7,18 17.5,18C15.8,18 13.35,18.65 12,19.5V8C13.35,7.15 15.8,6.5 17.5,6.5C18.7,6.5 19.9,6.65 21,7V18.5Z"/></svg>';
@@ -293,6 +301,11 @@ async function updateBookList(books) {
                     const img = document.createElement('img');
                     img.src = metadata.coverUrl;
                     img.alt = metadata.info.Title || "Book cover";
+                    img.style.width = '100%';
+                    img.style.height = '100%';
+                    img.style.objectFit = 'contain';
+                    
+                    // Show placeholder if image fails to load
                     img.onerror = () => {
                         coverDiv.appendChild(placeholderDiv);
                     };
@@ -314,7 +327,7 @@ async function updateBookList(books) {
         // Create and populate author element
         const authorElement = document.createElement('p');
         authorElement.className = 'pdf-author';
-        authorElement.textContent = metadata?.info?.Author || metadata?.info?.Creator || 'Неизвестный автор';
+        authorElement.textContent = metadata?.info?.Creator || 'Unknown Author';
         
         // Create metadata container
         const metadataDiv = document.createElement('div');
@@ -331,12 +344,12 @@ async function updateBookList(books) {
         // Add page/chapter count
         const pagesSpan = document.createElement('span');
         if (metadata?.pageCount) {
-            pagesSpan.textContent = `${metadata.pageCount} ${book.type === 'pdf' ? 'стр.' : 'гл.'}`;
+            pagesSpan.textContent = `${metadata.pageCount} ${book.type === 'pdf' ? 'pages' : 'chapters'}`;
         }
         
         // Add creation date
         const dateSpan = document.createElement('span');
-        dateSpan.textContent = creationDate.toLocaleDateString('ru-RU');
+        dateSpan.textContent = creationDate.toLocaleDateString();
         
         // Add publisher for EPUB if available
         if (book.type === 'epub' && metadata?.info?.Publisher) {
